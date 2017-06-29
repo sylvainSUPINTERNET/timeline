@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script
+            src="https://code.jquery.com/jquery-3.2.1.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
+            integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+            crossorigin="anonymous"></script>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular.min.js"></script>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link href="css/style.css" rel="stylesheet">
+
+    <title>TimeLine</title>
+
+</head>
+
+
+<body ng-app="myApp" class="container" ng-controller="MainController as mainCtrl">
+
+
+<div ng-show="mainCtrl.isDisconnected">
+    <div>
+        <h3>Rejoindre le TimeLine ! </h3>
+        <form class="form-inline" name="loginForm" ng-submit="mainCtrl.loginUser()">
+            <input type="text" class="form-control" placeholder="Votre pseudo ..." required
+                   ng-model="mainCtrl.nickname">
+            <input type="submit" class="btn btn-primary" value="Rejoindre">
+        </form>
+    </div>
+
+</div>
+
+<div ng-show="!mainCtrl.isDisconnected">
+    <div>
+        <h1>Bienvenue {{mainCtrl.nickname}}</h1>
+
+        <h4>Membres connectés</h4>
+        <ul>
+            <li ng-repeat="user in mainCtrl.users">{{user.nickname}} <span ng-show="user.id === mainCtrl.socket.id">(vous)</span>
+            </li>
+        </ul>
+
+        <form ng-submit="mainCtrl.submitForm()">
+            <div class="form-group">
+                <label for="url">URL</label>
+                <input type="text" class="form-control" id="url"
+                       placeholder="http://..." ng-model="mainCtrl.url">
+            </div>
+
+            <div class="form-group">
+                <label for="exampleTextarea">Example textarea</label>
+                <textarea class="form-control" id="exampleTextarea" rows="3" ng-model="mainCtrl.text"></textarea>
+            </div>
+            </fieldset>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+
+        <br>
+
+
+        <div class="card" ng-repeat="post in mainCtrl.posts | orderBy:'$index':true" id="{{post.id_poster}}">
+            <img class="card-img-top" src="{{post.url}}" alt="Card image cap">
+            <div class="card-block">
+                <p>Ecrit par <strong>{{post.author}}</strong></p>
+                <p class="card-text"><i>{{post.text}}</i>
+
+                <p class="text-right">
+                    <small>{{post.date}}</small>
+                </p>
+
+                <a ng-show="mainCtrl.currentUser.id === post.id" href="" class="btn btn-warning"
+                   ng-click="mainCtrl.postDelete(post.id_poster)">Supprimer</a>
+            </div>
+            <hr>
+        </div>
+
+    </div>
+</div>
+
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+
+
+    angular.module('myApp', [])
+            .controller('MainController', ['$scope', function ($scope) {
+                var mainCtrl = this; //pour faire un lien entre une vue / controller ici cela correspond à l'alias
+
+                mainCtrl.isDisconnected = true; //show what form
+
+
+                //USER info
+                mainCtrl.nickname = "";
+
+                //USERS
+                mainCtrl.users = [];
+
+                mainCtrl.currentUser = "";
+
+                //DATA form
+                mainCtrl.formData = {
+                    author: null,
+                    url: null,
+                    text: null,
+                    date: new Date(),
+                    id: null,
+                    id_poster:null
+                };
+                mainCtrl.url = "";
+                mainCtrl.text = "";
+
+
+                //POSTS
+                mainCtrl.posts = [];
+
+
+                mainCtrl.socket = io('ws://localhost:8000'); //var socket = io('ws://localhost:myPort');
+
+
+                mainCtrl.loginUser = function () {
+                    mainCtrl.isDisconnected = false;
+                    console.log(mainCtrl.nickname);
+
+
+                    mainCtrl.socket.emit('setNickname', mainCtrl.nickname);
+
+
+                    mainCtrl.socket.on('users', function (users) {
+                        mainCtrl.users = users;
+                        $scope.$apply();
+                    });
+
+
+                    mainCtrl.socket.on('newUser', function (newUser) {
+                        mainCtrl.users.push(newUser);
+                        mainCtrl.currentUser = newUser;
+
+                        $scope.$apply();
+                    });
+
+                    mainCtrl.socket.on('posts', function (posts) {
+                        mainCtrl.posts = posts;
+                        $scope.$apply();
+                    });
+
+                };
+
+
+                mainCtrl.submitForm = function () {
+
+
+                    console.log("URL => " + mainCtrl.url);
+                    console.log("TextArea => " + mainCtrl.text);
+
+
+                    mainCtrl.formData.text = mainCtrl.text;
+                    mainCtrl.formData.url = mainCtrl.url;
+                    mainCtrl.formData.author = mainCtrl.nickname;
+
+
+                    mainCtrl.formData.id = mainCtrl.currentUser.id;
+
+
+
+                    console.log("Le poste : " + mainCtrl.formData);
+
+                    mainCtrl.socket.emit('newPost', mainCtrl.formData);
+
+
+                    mainCtrl.socket.on('newPost', function (newPost) {
+                        mainCtrl.posts.push(newPost);
+                        $scope.$apply();
+                    });
+
+
+                };
+
+
+                mainCtrl.postDelete = function (postId) {
+                    // inserer une id dans l'user
+                    // inserer l'id socket pour afficher les bouton si user socket id == user id socket courrant afficher delete
+                    mainCtrl.socket.emit('postToDelete', postId);
+                };
+
+
+
+
+                /*
+                 mainCtrl.users = []; // Liste des utilisateurs
+                 mainCtrl.messages = [];
+                 mainCtrl.pseudo = ""; //input
+                 mainCtrl.messageText = "";
+                 mainCtrl.date = new Date();
+                 */
+
+
+            }]);
+
+</script>
+
+</body>
+</html>
